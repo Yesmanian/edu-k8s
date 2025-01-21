@@ -8,8 +8,8 @@ on: workflow_dispatch
 
 ## 워크플로우 전역에서 사용할 환경 변수  
 env:
-  REPO_ACCOUNT: ydcho0902
-  IMAGE_NAME: k8s-edu
+  REPO_ACCOUNT: iankim91
+  IMAGE_NAME: edu-demo
 
 ## 실행할 작업 정의 
 jobs:
