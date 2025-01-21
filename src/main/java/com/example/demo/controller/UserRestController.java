@@ -18,6 +18,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -44,9 +45,10 @@ public class UserRestController {
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @GetMapping("/{userNo}")
-    public ResponseEntity<UserDto> getUserByuserNo(@PathVariable String userNo) throws IOException, InterruptedException {
+    public ResponseEntity<Map<String, Object>> getUserByuserNo(@PathVariable String userNo) throws IOException, InterruptedException {
 
-        String url = serviceEndpoint + "/api/v1/user/" + userNo;
+        String url = serviceEndpoint + userNo;
+//        String url = serviceEndpoint;
         System.out.println(url);
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -61,12 +63,16 @@ public class UserRestController {
         ObjectMapper objectMapper = new ObjectMapper();
 
         // Map<String, Object>로 받아오기
-        Map<String, String> result = objectMapper.readValue((JsonParser) response, new TypeReference<Map<String, String>>(){});
+        Map<String, String> result = objectMapper.readValue(response.body(), new TypeReference<Map<String, String>>(){});
 
-        System.out.println(result.get("userNo"));   // 8226
-        System.out.println(result.get("userName")); // prod-8226
+        System.out.println(result.get("goodsNo"));   // 8226
+        System.out.println(result.get("goodsName")); // prod-8226
 
         UserDto userDto = userService.getUserByuserNo(userNo);
-        return ResponseEntity.ok(userDto);
+
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("User",userDto);
+        responseMap.put("Goods",result);
+        return ResponseEntity.ok(responseMap);
     }
 }
