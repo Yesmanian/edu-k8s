@@ -1,4 +1,4 @@
 spring.application.name: demo
 app.run.type: default
-SERVICE_ENDPOINT: http://k8s-good-service.edu-goods.svc.cluster.local:80/api/v1/goods/
+#SERVICE_ENDPOINT: http://k8s-good-service.edu-goods.svc.cluster.local:80/api/v1/goods/
 #SERVICE_ENDPOINT: http://localhost:8082/api/v1/goods/123

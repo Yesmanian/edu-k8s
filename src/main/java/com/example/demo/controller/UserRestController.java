@@ -44,6 +44,12 @@ public class UserRestController {
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
+    @GetMapping("/")
+    public String healthCheck() {
+        // 간단하게 OK 문자열만 응답
+        return "OK";
+    }
+
     @GetMapping("/{userNo}")
     public ResponseEntity<Map<String, Object>> getUserByuserNo(@PathVariable String userNo) throws IOException, InterruptedException {
 
