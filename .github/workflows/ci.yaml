@@ -1,0 +1,81 @@
+## 워크플로우 이름 정의
+name: Java CI with Gradle
+
+## 워크플로우 실행을 trigger 시키는 이벤트 설정
+# workflow_dispatch : 수동으로 실행
+# github에 소스 push, pull request or schedule, fork, release.. 등 
+on: workflow_dispatch
+
+## 워크플로우 전역에서 사용할 환경 변수  
+env:
+  REPO_ACCOUNT: ydcho0902
+  IMAGE_NAME: k8s-edu
+
+## 실행할 작업 정의 
+jobs:
+  build:                     # 종류 : test, deploy, lint(정적분석), staging, production, db 등 ..
+    runs-on: ubuntu-latest   # 작업이 진행될 가상 환경 정의 : 여기서는 ubuntu 최신 버전에서 build 진행 
+
+# 작업에서 실행할 단계, 순차적으로 실행 됨
+    steps:
+      - uses: actions/checkout@v4         # 현재 리포지토리의 코드를 체크아웃하는 GitHub Actions 제공 기본 액션
+        with:
+          token: ${{secrets.REPO_TOKEN}}  # github 리포지토리 접근 위한 Secret
+
+      - name: Set up JDK 17               # Gradle 빌드 위한 jave 설치 및 환경 설정
+        uses: actions/setup-java@v4       # GitHub Actions 제공하는 java setup 기본 액션
+        with:
+          java-version: '17'              # 설치할 Java의 버전 지정
+          distribution: 'temurin'         # JDK 배포판(zulu, adopt, openjdk..) 지정, Eclipse Temurin은 OpenJDK 기반 배포판
+
+      - name: Build with Gradle Wrapper   # Gradle 빌드 사용해 프로젝트를 빌드
+        run: ./gradlew build              # 이 단계에서 실행할 쉘 명령어 : gradle build 실행
+
+      - name: Setup Kustomize                 # Kubernetes 리소스 관리, 배포하는 Kustomize 설치
+        uses: imranismail/setup-kustomize@v1  # GitHub Actions 제공하는 setup-kustomize 액션 사용(imranismail 만든 Action)
+
+      - name: 'Gen Version'                   # 컨테이너 이미지 버전 관리를 위한 TAG로 사용한 값 생성 
+        id: gen-version                       # 이후의 다른 단계에서 이 단계 출력값이나 결과 참조할 수 있도록 ID 정의
+        run: |                                # 이 단계에서 실행할 쉘 명령어, 타임존(한국 표준시), 날짜 포멧 정의
+          export TZ=Asia/Seoul                
+          echo "VERSION=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+# echo "VERSION=$(...)" >> $GITHUB_ENV : 환경변수 VERSION에 date 값을 저장하고, GitHub Actions의 전역 환경 변수 $GITHUB_ENV에 저장
+      
+      - name: 'Dockerhub login'               # 이미지 빌드를 위해 dockerhub에 로그인 
+        uses: docker/login-action@v1          # GitHub Actions에서 제공하는 Docker 레지스트리 로그인 Action
+        with:
+          login-server: ${{ secrets.DOCKERHUB_LOGIN_SERVER }}   # dockerhub 주소(docker.io) 
+          username: ${{ secrets.DOCKERHUB_USERNAME }}           # dockerhub 로그인 계정
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}           # dockerhub Access 토큰 : PAT
+
+      - name: 'Build & Tag Image'             # docker build, tag 설정     
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_LOGIN_SERVER  }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} -f Dockerfile .
+          docker tag ${{ secrets.DOCKERHUB_LOGIN_SERVER  }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} ${{ env.REPO_ACCOUNT  }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+
+      - name: 'Push image'                    # 이미지 푸시를 위해 dockerhub에 로그인 
+        uses: docker/login-action@v1          # docker login <login-server> -u <username> -p <password> 내부에서 처리
+        with:
+          login-server: ${{ secrets.DOCKERHUB_LOGIN_SERVER  }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - run: |                               # dockerhub에 이미지 푸시 : docker push ydcho0902/k8s-edu:202501191123     
+          docker push ${{ env.REPO_ACCOUNT }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+
+      - name: Update Kubernetes resources    # kubernetes 배포 파일에서 docker 이미지 태그 업데이트 
+        run: |
+          echo "`ls`"
+          cd manifests/overlays/prod        
+          kustomize edit set image ${{ env.REPO_ACCOUNT }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          cat kustomization.yaml
+ # kustomize edit set image : prod DIR 아래 kubernetes 리소스 설정 파일에서 docker 이미지 태그 변경 (예:ydcho0902/k8s-edu:202501191123 로.)
+      
+      - name: Commit files   # kubernetes 설정 파일 변경 사항을 커밋하고 GitHub에 푸시
+        run: |
+          cd manifests
+          echo "`ls`"
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "github-actions"
+          git commit -am "Update image tag"
+          git push -u origin main
